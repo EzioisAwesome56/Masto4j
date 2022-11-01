@@ -1,24 +1,26 @@
 package com.github.ezioisawesome56.masto4j;
 
 import com.github.ezioisawesome56.masto4j.exceptions.MastodonAPIException;
-import com.github.ezioisawesome56.masto4j.jsonObjects.ApplicationCreateResponse;
-import com.github.ezioisawesome56.masto4j.jsonObjects.MastodonError;
-import com.github.ezioisawesome56.masto4j.jsonObjects.StatusResponse;
-import com.github.ezioisawesome56.masto4j.jsonObjects.TokenResponse;
+import com.github.ezioisawesome56.masto4j.jsonObjects.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class Mastodon {
 
@@ -130,7 +132,7 @@ public class Mastodon {
         CloseableHttpClient client = HttpClients.createDefault();
         HttpPost post = new HttpPost(this.instanceurl + baseurl);
         // set the required header
-        post.addHeader("Authorization", "Bearer " + access_token);
+        post.addHeader("Authorization", "Bearer " + this.access_token);
         // create the post form data
         List<NameValuePair> params = new ArrayList<>();
         params.add(new BasicNameValuePair("status", text));
@@ -148,6 +150,93 @@ public class Mastodon {
         client.close();
         response.close();
         return s;
+    }
+
+    /**
+     * Posts a status containing a media attachment that you uploaded previously
+     * @param text text to post with status
+     * @param mediaid id of the media you previously uploaded
+     * @return object form of the API response
+     * @throws IOException
+     * @throws MastodonAPIException
+     */
+    public StatusResponse postStatusWithMedia(String text, String mediaid) throws IOException, MastodonAPIException {
+        // do we have an access token?
+        if (this.access_token.isEmpty()){
+            throw new NullPointerException("Error: no access token!");
+        }
+        String baseurl = "/api/v1/statuses";
+        // setup the client
+        CloseableHttpClient client = HttpClients.createDefault();
+        HttpPost post = new HttpPost(this.instanceurl + baseurl);
+        // set auth header
+        post.addHeader("Authorization", "Bearer " + this.access_token);
+        // creeate form data
+        List<NameValuePair> params = new ArrayList<>();
+        params.add(new BasicNameValuePair("status", text));
+        // add the media id
+        params.add(new BasicNameValuePair("media_ids[]", mediaid));
+        post.setEntity(new UrlEncodedFormEntity(params));
+        // do request
+        CloseableHttpResponse response = client.execute(post);
+        String beans = EntityUtils.toString(response.getEntity());
+        int statuscode = response.getStatusLine().getStatusCode();
+        if (statuscode != 200){
+            MastodonError e = g.fromJson(beans, MastodonError.class);
+            throw new MastodonAPIException(statuscode, e);
+        }
+        // get response
+        StatusResponse s = g.fromJson(beans, StatusResponse.class);
+        client.close();
+        response.close();
+        return s;
+    }
+
+    /**
+     * uploads an image to the selected instance
+     * @param input byte[] for source image
+     * @param desc image description
+     * @param filename filename to upload as
+     * @return object form of api response
+     * @throws NullPointerException
+     * @throws IOException
+     * @throws MastodonAPIException
+     */
+    public MediaUploadResponse UploadImage(byte[] input, String desc, String filename) throws NullPointerException, IOException, MastodonAPIException {
+        // do we have an access token first?
+        if (this.access_token.isEmpty()){
+            throw new NullPointerException("Error: no access token!");
+        }
+        // setup the client
+        String baseurl = "/api/v1/media";
+        CloseableHttpClient client = HttpClients.createDefault();
+        HttpPost post = new HttpPost(this.instanceurl + baseurl);
+        // setup the headers correctly
+        post.addHeader("Authorization", "Bearer " + this.access_token);
+        // create form data
+        MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+        builder.addTextBody("description", desc);
+        builder.addBinaryBody("file", input, ContentType.APPLICATION_OCTET_STREAM, filename);
+        // build the entity
+        HttpEntity ent = builder.build();
+        post.setEntity(ent);
+        // get the response
+        CloseableHttpResponse response = client.execute(post);
+        String beans = EntityUtils.toString(response.getEntity());
+        int statuscode = response.getStatusLine().getStatusCode();
+        if (statuscode != 200){
+            // create error object
+            MastodonError e = g.fromJson(beans, MastodonError.class);
+            throw new MastodonAPIException(statuscode, e);
+        }
+        // create the mediauploadresponse
+        MediaUploadResponse mur = g.fromJson(beans, MediaUploadResponse.class);
+        client.close();
+        response.close();
+        return mur;
+    }
+    public MediaUploadResponse UploadImage(byte[] in, String filename) throws MastodonAPIException, IOException {
+        return UploadImage(in, "Uploaded via Masto4j", filename);
     }
 
     /**
