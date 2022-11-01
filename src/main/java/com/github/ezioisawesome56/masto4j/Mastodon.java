@@ -141,6 +141,8 @@ public class Mastodon {
         // do just a little bit of processing to the string
         String processed = "{ fak: " + beans + "}";
         NotificationResponse nr = g.fromJson(processed, NotificationResponse.class);
+        client.close();
+        response.close();
         return nr;
     }
 
