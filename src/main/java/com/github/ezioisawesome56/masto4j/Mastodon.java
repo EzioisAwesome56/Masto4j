@@ -66,6 +66,14 @@ public class Mastodon {
         this.clientsecret = secret;
     }
 
+    public Mastodon(String url, String appname, String clientid, String secret, String access_token){
+        this.instanceurl = url;
+        this.appname = appname;
+        this.clientid = clientid;
+        this.clientsecret = secret;
+        this.access_token = access_token;
+    }
+
     /**
      * used to register your application with an instance
      * @return object with required credentials inside
