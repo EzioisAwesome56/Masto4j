@@ -8,6 +8,7 @@ import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
@@ -110,6 +111,37 @@ public class Mastodon {
         response.close();
         client.close();
         return acr;
+    }
+
+    /**
+     * gets all notifications for the account the access token belongs too
+     * @return notifaction response object
+     * @throws IOException
+     * @throws MastodonAPIException
+     */
+    public NotificationResponse GetAllNotifications() throws IOException, MastodonAPIException {
+        String baseurl = "/api/v1/notifications";
+        // do we have an access token?
+        if (this.access_token.isEmpty()){
+            throw new NullPointerException("Error: no Access Token!");
+        }
+        // setup the client
+        CloseableHttpClient client = HttpClients.createDefault();
+        HttpGet get = new HttpGet(this.instanceurl + baseurl);
+        // set post header
+        get.addHeader("Authorization", "Bearer " + this.access_token);
+        // do the thing
+        CloseableHttpResponse response = client.execute(get);
+        String beans = EntityUtils.toString(response.getEntity());
+        int statuscode = response.getStatusLine().getStatusCode();
+        if (statuscode != 200){
+            MastodonError e = g.fromJson(beans, MastodonError.class);
+            throw new MastodonAPIException(statuscode, e);
+        }
+        // do just a little bit of processing to the string
+        String processed = "{ fak: " + beans + "}";
+        NotificationResponse nr = g.fromJson(processed, NotificationResponse.class);
+        return nr;
     }
 
     /**
