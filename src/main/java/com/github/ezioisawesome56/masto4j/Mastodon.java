@@ -2,6 +2,7 @@ package com.github.ezioisawesome56.masto4j;
 
 import com.github.ezioisawesome56.masto4j.exceptions.MastodonAPIException;
 import com.github.ezioisawesome56.masto4j.jsonObjects.*;
+import com.github.ezioisawesome56.masto4j.jsonObjects.subobjects.Account;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.http.HttpEntity;
@@ -133,6 +134,34 @@ public class Mastodon {
         response.close();
         return returned_page;
     }
+    private String httpDoGet(String url, HashMap<String, String> headers) throws MastodonAPIException, IOException {
+        // make the client
+        CloseableHttpClient client = HttpClients.createDefault();
+        HttpGet get = new HttpGet(this.instanceurl + url);
+        // do we have headers?
+        if (headers != null){
+            // add the headers
+            for (Map.Entry<String, String> header : headers.entrySet()){
+                get.addHeader(header.getKey(), header.getValue());
+            }
+        }
+        // do the request
+        CloseableHttpResponse response = client.execute(get);
+        String returned_page = EntityUtils.toString(response.getEntity(), "UTF-8");
+        int statuscode = response.getStatusLine().getStatusCode();
+        // did we have an error?
+        if (statuscode != 200){
+            // dah shit, we did have an error
+            client.close();
+            response.close();
+            MastodonError e = g.fromJson(returned_page, MastodonError.class);
+            throw new MastodonAPIException(statuscode, e);
+        }
+        // otherwise, just return the string
+        client.close();
+        response.close();
+        return returned_page;
+    }
 
     /**
      * gets all notifications for the account the access token belongs too
@@ -146,25 +175,13 @@ public class Mastodon {
         if (this.access_token.isEmpty()){
             throw new NullPointerException("Error: no Access Token!");
         }
-        // setup the client
-        CloseableHttpClient client = HttpClients.createDefault();
-        HttpGet get = new HttpGet(this.instanceurl + baseurl);
-        // set post header
-        get.addHeader("Authorization", "Bearer " + this.access_token);
-        // do the thing
-        CloseableHttpResponse response = client.execute(get);
-        String beans = EntityUtils.toString(response.getEntity());
-        int statuscode = response.getStatusLine().getStatusCode();
-        if (statuscode != 200){
-            MastodonError e = g.fromJson(beans, MastodonError.class);
-            throw new MastodonAPIException(statuscode, e);
-        }
+        // do the requestt
+        HashMap<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer " + this.access_token);
+        String content = httpDoGet(baseurl, headers);
         // do just a little bit of processing to the string
-        String processed = "{ fak: " + beans + "}";
-        NotificationResponse nr = g.fromJson(processed, NotificationResponse.class);
-        client.close();
-        response.close();
-        return nr;
+        String processed = "{ fak: " + content + "}";
+        return g.fromJson(processed, NotificationResponse.class);
     }
 
     /**
@@ -231,6 +248,9 @@ public class Mastodon {
      * @throws MastodonAPIException
      */
     public MediaUploadResponse UploadImage(byte[] input, String desc, String filename) throws NullPointerException, IOException, MastodonAPIException {
+        /**
+         * cant really refacttor this because its a special case. oops
+         */
         // do we have an access token first?
         if (this.access_token.isEmpty()){
             throw new NullPointerException("Error: no access token!");
@@ -298,9 +318,30 @@ public class Mastodon {
         // scope shit
         params.add(new BasicNameValuePair("scope", buildScope()));
         // do the request
-        String returned_cont = httpDoPost(params, this.instanceurl + "/oauth/token", null);
+        String returned_cont = httpDoPost(params, "/oauth/token", null);
         // parse and return object
         return g.fromJson(returned_cont, TokenResponse.class);
+    }
+
+    /**
+     * gets an account via an ID
+     * @param id account id in the database
+     * @return accountt objectt
+     * @throws NullPointerException no access token provided!
+     * @throws MastodonAPIException mastodon fucking exploded
+     * @throws IOException http client went haha boom
+     */
+    public Account GetAccountWithAuthorization(String id) throws NullPointerException, MastodonAPIException, IOException {
+        // check to make sure we even have an access token
+        if (this.access_token == null){
+            throw new NullPointerException("Error: no access token has been provided!");
+        }
+        // firstt we need to setup the headers ig
+        HashMap<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer " + this.access_token);
+        String cont = httpDoGet("/api/v1/accounts/" + id, headers);
+        // TODO: handle account suspension shit
+        return g.fromJson(cont, Account.class);
     }
 
     private String buildScope(){

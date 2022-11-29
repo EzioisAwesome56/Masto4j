@@ -1,6 +1,7 @@
 package com.github.ezioisawesome56.masto4j.jsonObjects.subobjects;
 
 public class Account {
+    private String id;
     private String acct;
     private String avatar;
     private String avatar_static;
@@ -14,6 +15,10 @@ public class Account {
     private String header_static;
     private String note;
     private PleromaAccountExtensions pleroma;
+
+    public String getId() {
+        return id;
+    }
 
     public String getHeader() {
         return header;
