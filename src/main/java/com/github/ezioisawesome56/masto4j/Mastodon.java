@@ -333,7 +333,7 @@ public class Mastodon {
      */
     public Account GetAccountWithAuthorization(String id) throws NullPointerException, MastodonAPIException, IOException {
         // check to make sure we even have an access token
-        if (this.access_token == null){
+        if (this.access_token.isEmpty()){
             throw new NullPointerException("Error: no access token has been provided!");
         }
         // firstt we need to setup the headers ig
