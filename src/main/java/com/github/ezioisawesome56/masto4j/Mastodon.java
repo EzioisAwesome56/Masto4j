@@ -19,9 +19,7 @@ import org.apache.http.util.EntityUtils;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 
 public class Mastodon {
 
@@ -85,9 +83,6 @@ public class Mastodon {
      */
     public ApplicationCreateResponse registerApplication() throws IOException, MastodonAPIException {
         String baseurl = "/api/v1/apps";
-        // setup the httpclient
-        CloseableHttpClient client = HttpClients.createDefault();
-        HttpPost psot = new HttpPost(this.instanceurl + baseurl);
         // create the post data
         List<NameValuePair> params = new ArrayList<>();
         // client name
@@ -97,20 +92,46 @@ public class Mastodon {
         // add it to params
         params.add(new BasicNameValuePair("scopes", buildScope()));
         // do the request
-        psot.setEntity(new UrlEncodedFormEntity(params));
-        CloseableHttpResponse response = client.execute(psot);
-        // get the response as a string
-        String beans = EntityUtils.toString(response.getEntity(), "UTF-8");
-        // check the error code
-        if (response.getStatusLine().getStatusCode() != 200){
-            MastodonError error = g.fromJson(beans, MastodonError.class);
-            throw new MastodonAPIException(response.getStatusLine().getStatusCode(), error);
-        }
+        String page = httpDoPost(params, baseurl, null);
         // create mastodon api response object thing
-        ApplicationCreateResponse acr = g.fromJson(beans, ApplicationCreateResponse.class);
-        response.close();
+        return g.fromJson(page, ApplicationCreateResponse.class);
+    }
+
+    /**
+     * function to help reduce on copied pastted code over and over and over
+     */
+    private String httpDoPost(List<NameValuePair> params, String url, HashMap<String, String> headers) throws IOException, MastodonAPIException{
+        // create a basic http client
+        CloseableHttpClient client = HttpClients.createDefault();
+        // make a new post objectt
+        HttpPost post = new HttpPost(this.instanceurl + url);
+        // do we have headers?
+        if (headers != null){
+            // add headers as required
+            for (Map.Entry<String, String> header : headers.entrySet()){
+                post.addHeader(header.getKey(), header.getValue());
+            }
+        }
+        // set the entity
+        post.setEntity(new UrlEncodedFormEntity(params));
+        // do the request
+        CloseableHttpResponse response = client.execute(post);
+        // first convert what was returned tto a string
+        String returned_page = EntityUtils.toString(response.getEntity(), "UTF-8");
+        // check the status code
+        if (response.getStatusLine().getStatusCode() != 200) {
+            // aw shit, there was an error
+            MastodonError error = g.fromJson(returned_page, MastodonError.class);
+            // close everything before we yeet
+            int statuscode = response.getStatusLine().getStatusCode();
+            client.close();
+            response.close();
+            throw new MastodonAPIException(statuscode, error);
+        }
+        // otherwise close and return the string
         client.close();
-        return acr;
+        response.close();
+        return returned_page;
     }
 
     /**
@@ -162,28 +183,14 @@ public class Mastodon {
             throw new NullPointerException("Error: post text is invalid");
         }
         String baseurl = "/api/v1/statuses";
-        // create new http clientt
-        CloseableHttpClient client = HttpClients.createDefault();
-        HttpPost post = new HttpPost(this.instanceurl + baseurl);
-        // set the required header
-        post.addHeader("Authorization", "Bearer " + this.access_token);
-        // create the post form data
+        // make form datta
         List<NameValuePair> params = new ArrayList<>();
         params.add(new BasicNameValuePair("status", text));
-        post.setEntity(new UrlEncodedFormEntity(params));
         // do request
-        CloseableHttpResponse response = client.execute(post);
-        String beans = EntityUtils.toString(response.getEntity());
-        int statuscode = response.getStatusLine().getStatusCode();
-        if (statuscode != 200){
-            MastodonError error = g.fromJson(beans, MastodonError.class);
-            throw new MastodonAPIException(statuscode, error);
-        }
-        // if we are here, should be good to go
-        StatusResponse s = g.fromJson(beans, StatusResponse.class);
-        client.close();
-        response.close();
-        return s;
+        HashMap<String, String> why = new HashMap<>();
+        why.put("Authorization", "Bearer " + this.access_token);
+        String returnedcont = httpDoPost(params, baseurl, why);
+        return g.fromJson(returnedcont, StatusResponse.class);
     }
 
     /**
@@ -200,30 +207,17 @@ public class Mastodon {
             throw new NullPointerException("Error: no access token!");
         }
         String baseurl = "/api/v1/statuses";
-        // setup the client
-        CloseableHttpClient client = HttpClients.createDefault();
-        HttpPost post = new HttpPost(this.instanceurl + baseurl);
-        // set auth header
-        post.addHeader("Authorization", "Bearer " + this.access_token);
-        // creeate form data
+        // make form data
         List<NameValuePair> params = new ArrayList<>();
         params.add(new BasicNameValuePair("status", text));
         // add the media id
         params.add(new BasicNameValuePair("media_ids[]", mediaid));
-        post.setEntity(new UrlEncodedFormEntity(params));
-        // do request
-        CloseableHttpResponse response = client.execute(post);
-        String beans = EntityUtils.toString(response.getEntity());
-        int statuscode = response.getStatusLine().getStatusCode();
-        if (statuscode != 200){
-            MastodonError e = g.fromJson(beans, MastodonError.class);
-            throw new MastodonAPIException(statuscode, e);
-        }
-        // get response
-        StatusResponse s = g.fromJson(beans, StatusResponse.class);
-        client.close();
-        response.close();
-        return s;
+        // do the request
+        HashMap<String, String> headerinfo = new HashMap<>();
+        headerinfo.put("Authorization", "Bearer " + this.access_token);
+        String returned_cont = httpDoPost(params, baseurl, headerinfo);
+        // parse and return response
+        return g.fromJson(returned_cont, StatusResponse.class);
     }
 
     /**
@@ -292,10 +286,6 @@ public class Mastodon {
         if (this.clientsecret.isEmpty() || this.clientid.isEmpty()){
             throw new NullPointerException("Error: missing client id/secret!");
         }
-        // spin up another httpclient
-        CloseableHttpClient client = HttpClients.createDefault();
-        // make new params box
-        HttpPost post = new HttpPost(this.instanceurl + "/oauth/token");
         // create form data
         List<NameValuePair> params = new ArrayList<>();
         params.add(new BasicNameValuePair("grant_type", "password"));
@@ -308,19 +298,9 @@ public class Mastodon {
         // scope shit
         params.add(new BasicNameValuePair("scope", buildScope()));
         // do the request
-        post.setEntity(new UrlEncodedFormEntity(params));
-        CloseableHttpResponse response = client.execute(post);
-        String beans = EntityUtils.toString(response.getEntity(), "UTF-8");
-        // check to makle sure its ok
-        if (response.getStatusLine().getStatusCode() != 200){
-            MastodonError e = g.fromJson(beans, MastodonError.class);
-            throw new MastodonAPIException(response.getStatusLine().getStatusCode(), e);
-        }
-        // create and return object
-        TokenResponse t = g.fromJson(beans, TokenResponse.class);
-        client.close();
-        response.close();
-        return t;
+        String returned_cont = httpDoPost(params, this.instanceurl + "/oauth/token", null);
+        // parse and return object
+        return g.fromJson(returned_cont, TokenResponse.class);
     }
 
     private String buildScope(){
