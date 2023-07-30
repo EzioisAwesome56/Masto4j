@@ -20,6 +20,7 @@ import org.apache.http.util.EntityUtils;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.*;
 
 public class Mastodon {
@@ -321,6 +322,61 @@ public class Mastodon {
         String returned_cont = httpDoPost(params, "/oauth/token", null);
         // parse and return object
         return g.fromJson(returned_cont, TokenResponse.class);
+    }
+
+    /**
+     * obtain a user token from a oauth code
+     * @param code oauth code you have obtained beforehand
+     * @return token response object with the token inside
+     * @throws NullPointerException
+     * @throws MastodonAPIException
+     * @throws IOException
+     */
+    public TokenResponse ObtainTokenViaOAUTHCode(String code) throws NullPointerException, MastodonAPIException, IOException {
+        // check to make sure they gave us a code
+        if (code.isEmpty()){
+            throw new NullPointerException("Error: no OAUTH code provided!");
+        }
+        // also check to make sure we have client tokens
+        if (this.clientsecret.isEmpty() || this.clientid.isEmpty()){
+            throw new NullPointerException("Error: missing client id/secret!");
+        }
+        // create the form data
+        List<NameValuePair> params = new ArrayList<>();
+        params.add(new BasicNameValuePair("grant_type",  "authorization_code"));
+        params.add(new BasicNameValuePair("code", code));
+        params.add(new BasicNameValuePair("client_id", this.clientid));
+        params.add(new BasicNameValuePair("client_secret", this.clientsecret));
+        params.add(new BasicNameValuePair("redirect_uri", redirect_urli));
+        params.add(new BasicNameValuePair("scope", buildScope()));
+        // run the request
+        String returned_cont = httpDoPost(params, "/oauth/token", null);
+        return g.fromJson(returned_cont, TokenResponse.class);
+    }
+
+    /***
+     * generates a OAUTH url that can be used to login to the instance via a web browser
+     * will require the user to enter in the provided code back to the application tho
+     * @return oauth url
+     * @throws NullPointerException if you forgot something
+     * @throws UnsupportedEncodingException this should not happen. why is this happening
+     */
+    public String GenerateOAUTHAuthorizeURL() throws NullPointerException, UnsupportedEncodingException {
+        if (this.clientid.isEmpty()){
+            throw new NullPointerException("Error: you do not have a ClientID set. Please set one first and try again!");
+        }
+        if (this.instanceurl.isEmpty()){
+            throw new NullPointerException("Error: no instance URL set (somehow)");
+        }
+        StringBuilder b = new StringBuilder();
+        // add the instance base url
+        b.append(this.instanceurl);
+        b.append("/oauth/authorize"); // append endpoint url
+        b.append("?response_type=code"); // we want a code response
+        b.append("&client_id=" + URLEncoder.encode(this.clientid, "UTF-8")); // our client id goes here
+        b.append("&scope=" + URLEncoder.encode(buildScope(), "UTF-8")); // provide scopes
+        b.append("&redirect_uri=" + URLEncoder.encode("urn:ietf:wg:oauth:2.0:oob", "UTF-8")); // URI type. defaults to showing the user a code
+        return b.toString(); // return the URL
     }
 
     /**
